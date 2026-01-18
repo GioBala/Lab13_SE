@@ -1,66 +1,86 @@
+import copy
+
 import networkx as nx
 from database.dao import DAO
-from model import interazione
-from model.interazione import Interazione
-
 
 class Model:
+
     def __init__(self):
         self.G = nx.DiGraph()
-        self.map={}
+        self.cammino_migliore=[]
+        self.peso_max=0
 
-    def Crea_graph(self):
-        archi=self.get_Archi()
-        #print(archi)
-        self.G.add_weighted_edges_from(archi)
-        n_archi=self.G.number_of_edges()
-        n_nodi=self.G.number_of_nodes()
-        min,max=self.get_min_max()
-        return n_nodi, n_archi, min,max
 
-    def get_Archi(self):
-        interazioni=DAO.get_interazione()
-        geni=DAO.get_gene()
-        for gene in geni:
-            self.map[gene.id]=gene
-        archi=[]
-        edges = {}
-        for i in interazioni:
-            if i.id_gene1 in self.map.keys() and i.id_gene2 in self.map.keys():
-                if int(self.map[i.id_gene1].cromosoma)   != int(self.map[i.id_gene2].cromosoma) and int(self.map[i.id_gene1].cromosoma)!=0 and int(self.map[i.id_gene2].cromosoma)!=0 :
-                    if (int(self.map[i.id_gene1].cromosoma),int(self.map[i.id_gene2].cromosoma),i.id_gene1,i.id_gene2,i.correlazione) not in archi:
-                        archi.append((int(self.map[i.id_gene1].cromosoma),int(self.map[i.id_gene2].cromosoma),i.id_gene1,i.id_gene2,i.correlazione))
-                        if (self.map[i.id_gene1].cromosoma,self.map[i.id_gene2].cromosoma) in edges.keys():
-                            edges[(self.map[i.id_gene1].cromosoma, self.map[i.id_gene2].cromosoma)] += i.correlazione
-                        else:
-                            edges[(self.map[i.id_gene1].cromosoma,self.map[i.id_gene2].cromosoma)]=i.correlazione
-                        #print(archi)
-        a=[]
-        for k,v in edges.items():
-            a.append((k[0],k[1],float(v)))
-        return a
+    def crea_grafo(self):
+        self.G = nx.DiGraph()
+        nodi=DAO.get_nodi()
+        self.G.add_nodes_from(nodi)
+        corr=DAO.get_archi()
+        a=set()
+        for i in corr:
+            a.add(i)
+        #print(self.G)
+        archi={}
+        for i in a:
+            if (i[0],i[1]) not in archi.keys():
+                archi[i[0],i[1]]=i[4]
+            else:
+                archi[i[0],i[1]]=archi[i[0],i[1]]+i[4]
+        for k,i in archi.items():
+            self.G.add_edge(k[0],k[1],weight=i)
+        return len(self.G.nodes),len(self.G.edges)
 
 
     def get_min_max(self):
-        p = self.G.get_edge_data(1, 2, "weight")
-        min=p["weight"]
-        max=0
+        min=float('inf')
+        max=-float('inf')
         for u,v in self.G.edges():
-            p=self.G.get_edge_data(u,v,"weight")
-            if max < float(p["weight"]):
-                max=float(p["weight"])
-            if min > float(p["weight"]):
-                min=float(p["weight"])
+            p=self.G.get_edge_data(u,v,'weight')
+            peso=p['weight']
+            if peso<min:
+                min=peso
+            if peso>max:
+                max=peso
         return min,max
 
-    def conta_archi(self,soglia):
-        sup=0
-        inf=0
+    def get_soglia(self,soglia):
+        mi=0
+        ma=0
         for u,v in self.G.edges():
-            p=self.G.get_edge_data(u,v,"weight")
-            if p["weight"] > soglia:
-                sup+=1
-            if p["weight"] < inf:
-                inf+=1
-        return sup,inf
+            p=self.G.get_edge_data(u,v,'weight')
+            peso=p['weight']
+            if peso<soglia:
+                mi+=1
+            if peso>soglia:
+                ma+=1
+        return mi,ma
+
+
+    def get_cammino(self,soglia):
+        self.cammino_migliore=[]
+        self.peso_max=0
+        for i in list(self.G.nodes()):
+            self.ricorsione(i,[],0,soglia)
+        s=f"Numero di archi percorso più lungo: {len(self.cammino_migliore)}\n"
+        s=s+f"Peso cammino massimo: {self.peso_max}\n"
+        for i in self.cammino_migliore:
+            s=s+f"{i[0]} --> {i[1]}: {i[2]}\n"
+        return s
+
+    def ricorsione(self,nodo,percorso,peso,soglia):
+        #percorso.append(soglia)
+        #print(percorso)
+        n=list(self.G.successors(nodo))
+        if peso>self.peso_max:
+            self.peso_max=peso
+            self.cammino_migliore=copy.deepcopy(percorso)
+        for i in n:
+            p = self.G.get_edge_data(nodo, i, 'weight')
+            pe = p['weight']
+            if (nodo,i,pe) not in percorso and pe>soglia:
+                percorso.append((nodo,i,pe))
+                self.ricorsione(i,percorso,peso+pe,soglia)
+                percorso.pop()
+
+
 

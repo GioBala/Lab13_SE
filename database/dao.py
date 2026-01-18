@@ -1,6 +1,4 @@
 from database.DB_connect import DBConnect
-from model.gene import Gene
-from model.interazione import Interazione
 
 class DAO:
 
@@ -23,28 +21,29 @@ class DAO:
         return result
 
     @staticmethod
-    def get_gene():
+    def get_nodi():
         conn = DBConnect.get_connection()
         cursor = conn.cursor()
-        query = """ SELECT * FROM gene"""
+        query = """ SELECT DISTINCT cromosoma FROM `gene` WHERE cromosoma!=0 """
         cursor.execute(query)
         result=[]
         for row in cursor:
-            result.append(Gene(row[0],row[1],row[2],row[3]))
+            result.append(row[0])
         cursor.close()
         conn.close()
         return result
 
     @staticmethod
-    def get_interazione():
+    def get_archi():
         conn = DBConnect.get_connection()
         cursor = conn.cursor()
-        query = """ SELECT * FROM interazione"""
+        query = """SELECT  g1.cromosoma,g2.cromosoma,g1.id,g2.id,i.correlazione FROM interazione as i 
+                    JOIN gene g1 ON g1.id=i.id_gene1 JOIN gene g2 ON g2.id=i.id_gene2
+                    WHERE g1.cromosoma!=g2.cromosoma AND g1.cromosoma!=0"""
         cursor.execute(query)
         result=[]
         for row in cursor:
-            result.append(Interazione(row[0],row[1],row[2],row[3]))
+            result.append((row[0],row[1],row[2],row[3],row[4]))
         cursor.close()
         conn.close()
         return result
-
